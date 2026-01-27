@@ -1,6 +1,8 @@
 # Polish Flow 🇵🇱
 > **Status: 🚧 Currently in Development**
 
+> *This README, and project was written and coded by AI under human supervision.*
+
 **Polish Flow** is an advanced, AI-powered language learning application designed to accelerate Polish fluency through personalized Spaced Repetition (SRS) and real-time pronunciation coaching. Unlike static flashcard apps, Polish Flow listens to you, corrects your mistakes, and dynamically generates context to help you learn.
 
 ## 🚀 Key Features
