@@ -1,0 +1,713 @@
+/* Existing Styles... (I will append or ensure structure supports these) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+
+:root {
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    line-height: 1.5;
+    font-weight: 400;
+
+    color-scheme: dark;
+
+    --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+    --glass-bg: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+
+    --primary-accent: #38bdf8;
+    /* Sky Blue */
+    --primary-hover: #0ea5e9;
+    --secondary-accent: #818cf8;
+    /* Indigo */
+
+    --text-main: rgba(255, 255, 255, 0.95);
+    --text-secondary: rgba(255, 255, 255, 0.7);
+
+    --success-color: #4ade80;
+    --error-color: #f87171;
+    --warning-color: #fbbf24;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    display: flex;
+    place-items: center;
+    min-width: 320px;
+    min-height: 100vh;
+    background: var(--bg-gradient);
+    background-attachment: fixed;
+    color: var(--text-main);
+    overflow-x: hidden;
+}
+
+#root {
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 2rem;
+    display: flex;
+    justify-content: center;
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    width: 100%;
+    max-width: 600px;
+    position: relative;
+}
+
+/* XP Bar */
+.xp-container {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+    border: 1px solid var(--glass-border);
+}
+
+.level-badge {
+    background: var(--primary-accent);
+    color: #0f172a;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.8rem;
+    line-height: 0.9;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+}
+
+.level-label {
+    font-size: 0.55rem;
+    opacity: 0.7;
+}
+
+.xp-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.xp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--secondary-accent), var(--primary-accent));
+    border-radius: 4px;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.xp-text {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    min-width: 60px;
+    text-align: right;
+}
+
+
+/* Header & Progress Controls */
+.header-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 0.5rem;
+}
+
+.header-controls h1 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 700;
+    background: linear-gradient(to right, #fff, #cbd5e1);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.progress-btn {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    padding: 0.6rem 1.2rem;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.progress-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Lexicon Modal */
+.lexicon-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+}
+
+.lexicon-modal {
+    background: #1e1b4b;
+    background: linear-gradient(135deg, #0f172a, #1e1b4b);
+    width: 100%;
+    max-width: 700px;
+    height: 80vh;
+    border-radius: 24px;
+    border: 1px solid var(--glass-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.lexicon-header {
+    padding: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.lexicon-header h2 {
+    margin: 0;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+}
+
+.close-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.lexicon-tabs {
+    display: flex;
+    padding: 1rem 1.5rem 0 1.5rem;
+    gap: 1rem;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    padding: 0.8rem 0;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+}
+
+.tab-btn.active {
+    color: var(--primary-accent);
+}
+
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--primary-accent);
+}
+
+.lexicon-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+}
+
+/* Dashboard Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--glass-border);
+    padding: 1.5rem;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.stat-icon {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.stat-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #fff;
+}
+
+.stat-sub {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+.stat-label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.danger-zone {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    border-radius: 12px;
+    background: rgba(248, 113, 113, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.reset-danger-btn {
+    background: rgba(248, 113, 113, 0.2);
+    color: var(--error-color);
+    border: 1px solid var(--error-color);
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.reset-danger-btn:hover {
+    background: rgba(248, 113, 113, 0.3);
+}
+
+/* Raw Data Table */
+.table-container {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+th {
+    text-align: left;
+    padding: 1rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--glass-border);
+}
+
+td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.polish-cell {
+    font-weight: 600;
+    color: #fff;
+}
+
+.status-badge {
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.status-badge.new {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+}
+
+.status-badge.learning {
+    background: rgba(56, 189, 248, 0.2);
+    color: var(--primary-accent);
+}
+
+.status-badge.mastered {
+    background: rgba(74, 222, 128, 0.2);
+    color: var(--success-color);
+}
+
+.center-cell {
+    text-align: center;
+}
+
+/* ... Rest of existing styles (Flashcard, etc.) ensure they aren't overwritten badly */
+/* To ensure safety, I've redefined root and body, so this should replace index.css fully */
+/* Adding back necessary existing styles from memory/context if needed */
+/* 3D Flashcard Flip */
+.flashcard-container {
+    perspective: 1000px;
+    width: 100%;
+    /* margin-top: 1rem; // Handled by flex gap usually */
+}
+
+.flashcard-inner {
+    position: relative;
+    width: 100%;
+    min-height: 250px;
+    text-align: center;
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Fast & Clean */
+    transform-style: preserve-3d;
+    cursor: pointer;
+}
+
+.flashcard-inner.flipped {
+    transform: rotateX(180deg);
+}
+
+.flashcard-front,
+.flashcard-back {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    border-radius: 24px;
+    padding: 3rem 2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* .flashcard-front uses default shared styles + specific positioning */
+
+.flashcard-back {
+    transform: rotateX(180deg);
+    background: linear-gradient(135deg, rgba(30, 27, 75, 0.9), rgba(15, 23, 42, 0.9));
+    /* Slightly darker/different to indicate change */
+}
+
+/* Original Flashcard styles content mapped to front/back commonality */
+.card-content h2 {
+    font-size: 3rem;
+    margin: 0 0 1rem 0;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+}
+
+.generated-sentence {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--primary-accent);
+    margin-bottom: 2rem;
+    line-height: 1.4;
+}
+
+.word-miniature {
+    font-size: 1.5rem;
+    opacity: 0.6;
+    /* text-transform: uppercase; */
+    /* letter-spacing: 0.1em; */
+    /* margin-top: auto; replaced by absolute */
+    position: absolute;
+    bottom: 2.5rem;
+    /* Explicit lift */
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+    /* ensure clicks pass through if needed, though unnecesssary */
+}
+
+/* ... etc (assuming previous styles are maintained or I need to paste all of them. I'll paste the full combined CSS to be safe) */
+
+.card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+}
+
+.card-content h2 {
+    font-size: 3rem;
+    margin: 0 0 1rem 0;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+}
+
+.hint {
+    color: var(--text-secondary);
+    font-style: italic;
+    font-size: 1.1rem;
+    text-align: center;
+    width: 100%;
+    display: block;
+}
+
+.controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    margin-top: 1rem;
+}
+
+.skip-button,
+.known-button {
+    background: transparent;
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    padding: 0.6rem 1.2rem;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.skip-button:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.known-button {
+    border-color: rgba(74, 222, 128, 0.3);
+    color: var(--success-color);
+}
+
+.known-button:hover {
+    background: rgba(74, 222, 128, 0.1);
+    border-color: var(--success-color);
+    transform: translateY(-1px);
+    box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+}
+
+.record-button,
+.next-button {
+    font-size: 1.2rem;
+    padding: 1rem 2.5rem;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    background: var(--primary-accent);
+    color: #0f172a;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 160px;
+}
+
+.record-button:hover,
+.next-button:hover {
+    background: var(--primary-hover);
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(56, 189, 248, 0.4);
+}
+
+.record-button:active,
+.next-button:active {
+    transform: translateY(-1px);
+}
+
+.record-button.recording {
+    background-color: var(--error-color);
+    color: white;
+    animation: pulse 2s infinite;
+    box-shadow: 0 0 20px rgba(248, 113, 113, 0.4);
+}
+
+.feedback {
+    margin-top: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    padding: 1.5rem;
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+    text-align: left;
+    width: 100%;
+    animation: slideUp 0.3s ease-out;
+}
+
+.main-feedback {
+    font-weight: 700;
+    color: var(--success-color);
+    margin-bottom: 0.8rem;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.rich-feedback p {
+    margin: 0.5rem 0;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.rich-feedback strong {
+    color: var(--primary-accent);
+    font-weight: 600;
+    margin-right: 0.5rem;
+}
+
+.coach-bubble {
+    margin-top: 1rem;
+    background: rgba(251, 191, 36, 0.1);
+    /* Amber Tint */
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    color: #fbbf24;
+    padding: 0.8rem;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.coach-bubble.loading {
+    opacity: 0.6;
+    border-style: dashed;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.score {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    margin-left: 10px;
+    color: var(--primary-accent);
+    border: 1px solid var(--glass-border);
+    vertical-align: middle;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.7);
+    }
+
+    70% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(248, 113, 113, 0);
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.mode-indicator {
+    background: rgba(56, 189, 248, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    color: var(--primary-accent);
+    padding: 0.4rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.progress-info {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: -1rem;
+}
+
+.target-highlight {
+    color: var(--primary-accent);
+    font-weight: 700;
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+}
