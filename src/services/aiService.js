@@ -23,11 +23,15 @@ const generateWithRetry = async (modelInstance, promptParts, retries = 3, initia
 // Audio Model: Used for main audio analysis
 const model = genAI.getGenerativeModel({
   model: "gemini-3-flash-preview", // Smartest model for audio analysis
+  systemInstruction: {
+    parts: [{ text: "You are a dedicated Polish phonetic transcriber. You are incapable of understanding English. Map ALL audio input to the nearest corresponding Polish phonemes/spelling. If a sound is ambiguous, assume the Polish interpretation." }],
+  },
   generationConfig: {
     maxOutputTokens: 400,  // Low enough for low latency response times
-    temperature: 0.2, // Lower temperature for precision audio analysis
+    temperature: 0.6, // Lower temperature for precision audio analysis
     topP: 1,
     topK: 1,
+    thinkingLevel: "minimal"
   }
 });
 
@@ -73,14 +77,24 @@ export const aiService = {
         },
       };
 
-      const prompt = `Listen to this audio. The user is trying to say the Polish word: "${targetPolishWord}".
-      Strictly output in this format: "HEARD_PHRASE;LANGUAGE_DETECTED;STATUS"
-      
-      - HEARD_PHRASE: Transcribe exactly what you heard (in Polish or English phonetics).
-      - LANGUAGE_DETECTED: "Polish", "English", or "Unknown".
-      - STATUS: "CORRECT" if pronunciation is close enough for a beginner, otherwise "INCORRECT".
-      
-      Example: "Dziękuję;Polish;CORRECT"`;
+      const prompt = `
+      Target Word: "${targetPolishWord}"
+
+      Task: Transcribe the audio using strict Polish phonology and verify against the Target.
+
+      Output Format: HEARD_PHRASE;STATUS;CONFIDENCE
+
+      Rules:
+      1. HEARD_PHRASE: Transcribe what you hear using Polish spelling (e.g., If you hear the sound 'bitch', write 'być'.).
+      2. STATUS: 
+        - "CORRECT" only if the HEARD_PHRASE matches the Target Word (allowing for minor accent deviations).
+        - "INCORRECT" for any mismatch.
+      3. CONFIDENCE: 0.0-1.0 score.
+
+      Example Output:
+      Dziękuję;CORRECT;0.9
+      `;
+
 
       const result = await generateWithRetry(model, [prompt, audioPart]);
       const response = await result.response;
