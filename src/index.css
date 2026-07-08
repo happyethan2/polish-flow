@@ -8,7 +8,11 @@
 
     color-scheme: dark;
 
-    --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #312e81 100%);
+    /* Symmetric vertical gradient: both edges are exactly --bg-edge (#0f172a), so the flat
+       iOS status bar / toolbar (a single theme-color) blends seamlessly at top AND bottom.
+       The indigo glow peaks in the middle, behind the flashcard. */
+    --bg-edge: #0f172a;
+    --bg-gradient: linear-gradient(180deg, var(--bg-edge) 0%, #312e81 50%, var(--bg-edge) 100%);
     --glass-bg: rgba(255, 255, 255, 0.05);
     --glass-border: rgba(255, 255, 255, 0.1);
     --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
@@ -38,16 +42,37 @@
     box-sizing: border-box;
 }
 
+/* Fallback equals the gradient's edge color, so any pixel not covered by the fixed layer
+   (e.g. an iOS safe area behind the toolbar) is identical to the content edge — no seam. */
+html {
+    background-color: var(--bg-edge);
+    min-height: 100%;
+}
+
 body {
     margin: 0;
     display: flex;
     place-items: center;
     min-width: 320px;
     min-height: 100vh;
-    background: var(--bg-gradient);
-    background-attachment: fixed;
+    min-height: 100dvh; /* dynamic viewport height: fills the actual visible area on mobile */
+    background: transparent;
     color: var(--text-main);
     overflow-x: hidden;
+}
+
+/* Full-screen fixed gradient layer. Unlike `background-attachment: fixed` (which iOS paints
+   against the visible viewport, leaving the bottom safe area / behind-toolbar region black),
+   a fixed element with inset:0 + viewport-fit=cover reaches every physical screen edge —
+   the notch AND the home-indicator area. Sits behind all content via z-index. */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: var(--bg-gradient);
+    background-color: var(--bg-edge);
+    z-index: -1;
+    pointer-events: none;
 }
 
 #root {
@@ -514,7 +539,7 @@ td {
 }
 
 .skip-button,
-.known-button {
+.suspend-button {
     background: transparent;
     border: 1px solid var(--glass-border);
     color: var(--text-secondary);
@@ -535,16 +560,18 @@ td {
     transform: translateY(-1px);
 }
 
-.known-button {
-    border-color: rgba(74, 222, 128, 0.3);
-    color: var(--success-color);
+/* Subtle red: suspend removes the word from the curriculum, so it reads as destructive. */
+.suspend-button {
+    border-color: rgba(248, 113, 113, 0.25);
+    color: rgba(248, 113, 113, 0.75);
 }
 
-.known-button:hover {
-    background: rgba(74, 222, 128, 0.1);
-    border-color: var(--success-color);
+.suspend-button:hover {
+    background: rgba(248, 113, 113, 0.08);
+    border-color: var(--error-color);
+    color: var(--error-color);
     transform: translateY(-1px);
-    box-shadow: 0 0 15px rgba(74, 222, 128, 0.2);
+    box-shadow: 0 0 15px rgba(248, 113, 113, 0.15);
 }
 
 .record-button,
@@ -710,4 +737,179 @@ td {
     color: var(--primary-accent);
     font-weight: 700;
     text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+}
+/* --- Result override (swap) --- */
+.swap-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.swap-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.override-note {
+    font-size: 0.75rem;
+    font-weight: 400;
+    opacity: 0.6;
+    margin-left: 0.4rem;
+}
+
+/* --- Sentence comparison (after a miss) --- */
+.compare-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+}
+
+.compare-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    opacity: 0.7;
+    font-size: 0.85rem;
+    margin-top: 0.75rem;
+}
+
+.spin {
+    animation: compare-spin 1s linear infinite;
+}
+
+@keyframes compare-spin {
+    to { transform: rotate(360deg); }
+}
+
+.compare-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.compare-card {
+    border-radius: 12px;
+    padding: 0.85rem 1.1rem;
+    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.04);
+    text-align: left;
+}
+
+.compare-card p {
+    margin: 0.3rem 0;
+}
+
+/* The Polish sentence is the payload — make it unmistakably distinct from its translation. */
+.compare-polish {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.compare-target {
+    border-color: rgba(74, 222, 128, 0.35);
+}
+
+.compare-heard {
+    border-color: rgba(251, 191, 36, 0.35);
+}
+
+.compare-word {
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.compare-tag {
+    font-size: 0.7rem;
+    font-weight: 500;
+    opacity: 0.6;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-left: 0.35rem;
+}
+
+.compare-english {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    font-style: italic;
+    opacity: 0.85;
+}
+
+.compare-tip {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    background: rgba(56, 189, 248, 0.08);
+    border-left: 3px solid var(--primary-accent);
+    border-radius: 6px;
+    font-size: 0.88rem;
+    line-height: 1.45;
+    text-align: left;
+}
+
+/* --- Coach's Notes (wiki markdown) --- */
+.wiki-content {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    text-align: left;
+}
+
+.wiki-content h2 {
+    font-size: 1rem;
+    margin: 0.9rem 0 0.4rem;
+    color: var(--primary-accent);
+}
+
+.wiki-content h2:first-child {
+    margin-top: 0;
+}
+
+.wiki-content ul {
+    margin: 0.25rem 0 0.5rem;
+    padding-left: 1.25rem;
+}
+
+.wiki-content li {
+    margin: 0.25rem 0;
+}
+
+.wiki-content p {
+    margin: 0.5rem 0;
+}
+
+/* --- Card interactivity affordance (replaces the old flip-cue emoji) --- */
+.flashcard-front,
+.flashcard-back {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.flashcard-inner:not(.flipped):hover .flashcard-front,
+.flashcard-inner.flipped:hover .flashcard-back {
+    border-color: rgba(56, 189, 248, 0.45);
+    box-shadow: 0 0 24px rgba(56, 189, 248, 0.12), var(--glass-shadow);
+}
+
+/* --- Hear-pronunciation button in the feedback panel --- */
+.hear-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+    margin-right: 0.5rem;
 }

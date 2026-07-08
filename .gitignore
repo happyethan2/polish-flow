@@ -24,3 +24,6 @@ dist-ssr
 
 # Environment Variables
 .env
+
+# Claude Code machine-specific settings (headroom proxy routing)
+.claude/settings.local.json

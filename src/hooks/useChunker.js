@@ -88,22 +88,13 @@ export const useChunker = () => {
 
     const recordSuccess = (wordId) => {
         setGameState(prev => {
-            // Default to bucket -1 so first success moves to 0 (1 minute)
-            // Actually, if it's new, we want 1st success -> Bucket 1 (10m) or Bucket 2 (1d)?
-            // Standard Anki: New -> 1m (Again) or 10m (Good).
-            // Let's simplified flow: New -> Bucket 1 (10m).
-            // If currently Bucket 0 (Just failed), Success -> Bucket 1 (10m).
             const current = prev.words[wordId] || { bucket: 0, total_correct: 0, total_incorrect: 0 };
 
-            let newBucket;
-            // Promotion Logic
-            if (current.bucket === 0) {
-                // Moved from "Learning" (1m) to "Short Term" (10m)
-                newBucket = 1;
-            } else {
-                // Standard SRS Progression
-                newBucket = Math.min(current.bucket + 1, SRS_INTERVALS.length - 1);
-            }
+            // Promotion: a new or freshly-failed card (bucket 0) graduates to the 10m step;
+            // otherwise advance one bucket, capped at mastery. (Anki "Good"-style progression.)
+            const newBucket = current.bucket === 0
+                ? 1
+                : Math.min(current.bucket + 1, SRS_INTERVALS.length - 1);
 
             const isMastery = newBucket === SRS_INTERVALS.length - 1;
 
@@ -177,21 +168,23 @@ export const useChunker = () => {
     };
 
     const suspendWord = (wordId) => {
-        setGameState(prev => ({
-            ...prev,
-            words: {
-                ...prev.words,
-                [wordId]: {
-                    ...(prev.words[wordId] || {}),
-                    bucket: SRS_INTERVALS.length, // Special "Suspended" bucket (Infinity?) or just status='suspended'
-                    // Actually, let's just mark it as 'suspended' and ensure the chunker ignores it.
-                    // The easiest way is to push it to a high bucket or a specific status.
-                    // Let's use status field.
-                    status: 'suspended',
-                    nextReview: Date.now() + (365 * 24 * 60 * 60 * 1000) // 1 year
+        setGameState(prev => {
+            const current = prev.words[wordId] || {};
+            return {
+                ...prev,
+                words: {
+                    ...prev.words,
+                    [wordId]: {
+                        ...current,
+                        // Keep bucket in range; suspension is expressed via `status`, which the
+                        // batching and due-count filters honor. Push nextReview far out as a backstop.
+                        bucket: Math.min(current.bucket ?? 0, SRS_INTERVALS.length - 1),
+                        status: 'suspended',
+                        nextReview: Date.now() + (365 * 24 * 60 * 60 * 1000) // 1 year
+                    }
                 }
-            }
-        }));
+            };
+        });
     };
 
     const resetProgress = () => {
@@ -203,10 +196,12 @@ export const useChunker = () => {
         }
     };
 
-    // Calculate due count for UI
+    // Due count for the UI. Intentionally time-relative (live), so reading the clock here is expected.
+    // eslint-disable-next-line react-hooks/purity
+    const now = Date.now();
     const dueCount = workingSet.filter(w => {
         const prog = gameState.words[w.id];
-        return prog && prog.nextReview <= Date.now() && prog.status !== 'suspended';
+        return prog && prog.nextReview <= now && prog.status !== 'suspended';
     }).length;
 
     return {

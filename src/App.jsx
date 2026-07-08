@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useChunker } from './hooks/useChunker';
+import { useRecorder } from './hooks/useRecorder';
+import { useLearnerProfile } from './hooks/useLearnerProfile';
 import { Flashcard } from './components/Flashcard';
 import { RecordButton } from './components/RecordButton';
+import { Feedback } from './components/Feedback';
+import { effectiveStatus } from './utils/feedback';
+import { Eye, Ban, RotateCcw, ArrowLeftRight } from 'lucide-react';
 import { Lexicon } from './components/Lexicon';
 import { XPBar } from './components/XPBar';
-// import { AudioVisualizer } from './components/AudioVisualizer'; // Removed
-import { useAudioVolume } from './hooks/useAudioVolume';
 import { aiService } from './services/aiService';
+import { log } from './utils/logger';
 import polishWords from './data/words.json';
 
 import './index.css';
@@ -14,365 +18,210 @@ import './index.css';
 const MODES = ['input', 'recall'];
 
 function App() {
-  const { workingSet, gameState, dueCount, recordSuccess, recordFailure, markAsKnown, suspendWord, resetProgress } = useChunker();
+  const { workingSet, gameState, dueCount, recordSuccess, recordFailure, suspendWord, resetProgress } = useChunker();
+  const recorder = useRecorder();
+  const profile = useLearnerProfile();
 
-  // Note: userProgress is now gameState.words
-  const userProgress = gameState.words;
+  // Keep a live ref so effects/handlers can reach the recorder without re-subscribing.
+  const recorderRef = useRef(recorder);
+  recorderRef.current = recorder;
 
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
   const [modeIndex, setModeIndex] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
-  const [feedback, setFeedback] = useState(null);
-  const [pendingResult, setPendingResult] = useState(null); // { success: boolean, id: number }
-
-  const [processing, setProcessing] = useState(false);
-  const [lastResult, setLastResult] = useState(null); // Track last result for manual swap
-  const [skippedWords, setSkippedWords] = useState(new Set());
+  const [feedback, setFeedback] = useState(null); // data object — see components/Feedback.jsx
+  const [pendingResult, setPendingResult] = useState(null); // { success, id } committed on Next
   const [showLexicon, setShowLexicon] = useState(false);
-
-  // Audio Recording State
-  const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [rawStream, setRawStream] = useState(null);
-  const audioChunksRef = useRef([]);
-
-  // Audio Volume Hook
-  const volume = useAudioVolume(rawStream, isRecording);
 
   const currentWord = workingSet[currentWordIndex];
   const currentMode = MODES[modeIndex];
 
-  // Helper: Next Valid Index
-  const getNextValidIndex = (startIndex, words, skipped) => {
-    let nextIndex = (startIndex + 1) % words.length;
-    let attempts = 0;
-    while (skipped.has(words[nextIndex].id) && attempts < words.length) {
-      nextIndex = (nextIndex + 1) % words.length;
-      attempts++;
-    }
-    return attempts < words.length ? nextIndex : -1;
-  };
-
+  // Keep the index in range as the working set resizes.
   useEffect(() => {
-    if (currentWord && skippedWords.has(currentWord.id)) {
-      handleNext();
+    if (workingSet.length > 0 && currentWordIndex >= workingSet.length) {
+      setCurrentWordIndex(0);
     }
-  }, [currentWord, skippedWords]);
+  }, [workingSet.length, currentWordIndex]);
 
-
-  // Auto-Listening Logic
+  // Surface microphone/recorder errors to the user.
   useEffect(() => {
-    console.log(`[AutoRecord] Triggered for Word: ${currentWord?.polish}, Mode: ${currentMode}`);
-    let activeStream = null;
+    if (recorder.error) setFeedback({ status: 'error', message: recorder.error });
+  }, [recorder.error]);
 
-    const startMic = async () => {
-      try {
-        if (rawStream) {
-          rawStream.getTracks().forEach(track => track.stop());
-        }
-
-        activeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        setRawStream(activeStream);
-
-        const recorder = new MediaRecorder(activeStream);
-
-        recorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
-          }
-        };
-
-        setMediaRecorder(recorder);
-
-        // Auto-start only in Recall mode
-        if (currentMode === 'recall' && currentWord) {
-          audioChunksRef.current = [];
-          recorder.start();
-          setIsRecording(true);
-        }
-
-      } catch (err) {
-        console.error("[AutoRecord] Error accessing microphone:", err);
-        setFeedback("Error: Could not access microphone. Please check permissions.");
-      }
-    };
-
-    if (currentWord) {
-      setFeedback(null);
-      startMic();
-    }
-
-    return () => {
-      if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, [currentWord, currentMode]);
-
-  /* Moved key listener to bottom to access handlers */
-
-
-  const handleNext = () => {
-    // Commit Pending Result if exists
-    if (pendingResult) {
-      if (pendingResult.success) {
-        recordSuccess(pendingResult.id);
-      } else {
-        recordFailure(pendingResult.id);
-      }
-      setPendingResult(null);
-    }
-
+  // On each word/mode change: clear feedback, and auto-start recording in recall mode.
+  useEffect(() => {
     setFeedback(null);
-    setIsRecording(false);
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      mediaRecorder.stop();
+    if (!currentWord) return;
+    log('flow', 'word/mode effect', { wordId: currentWord.id, polish: currentWord.polish, mode: currentMode });
+    if (currentMode === 'recall') {
+      log('flow', 'auto-start recording (non-gesture)', { wordId: currentWord.id });
+      recorderRef.current.start();
     }
+    return () => {
+      log('flow', 'effect cleanup -> cancel', { wordId: currentWord.id, mode: currentMode });
+      recorderRef.current.cancel();
+    };
+    // recorder is reached via ref; depend only on the word/mode identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWord?.id, currentMode]);
 
+  const advance = () => {
+    setFeedback(null);
     if (modeIndex < MODES.length - 1) {
       setModeIndex(modeIndex + 1);
     } else {
       setModeIndex(0);
       if (workingSet.length > 0) {
-        const nextIndex = getNextValidIndex(currentWordIndex, workingSet, skippedWords);
-        if (nextIndex !== -1) {
-          setCurrentWordIndex(nextIndex);
-        } else {
-          // Reset skips if cycle done or handle gracefully
-          // Ensure we don't endless loop
-          setSkippedWords(new Set());
-        }
+        setCurrentWordIndex((i) => (i + 1) % workingSet.length);
       }
     }
   };
 
-  // SRS Replacements
+  const handleNext = () => {
+    log('button', 'next', { wordId: currentWord?.id, mode: currentMode, hasPending: !!pendingResult });
+    if (pendingResult) {
+      if (pendingResult.success) recordSuccess(pendingResult.id);
+      else recordFailure(pendingResult.id);
+      setPendingResult(null);
+    }
+    advance();
+  };
+
+  const validateRecording = async () => {
+    log('flow', 'validateRecording:stop', { wordId: currentWord.id });
+    const blob = await recorderRef.current.stop();
+    if (!blob || blob.size < 1000) {
+      log('flow', 'validateRecording:blob too small', { bytes: blob?.size ?? 0 });
+      setFeedback({ status: 'error', message: 'Audio too short/empty. Please try again.' });
+      return;
+    }
+
+    setFeedback({ status: 'processing' });
+    try {
+      const result = await aiService.validatePronunciation(blob, currentWord.polish);
+      log('flow', 'validate:result', { correct: result.correct, heard: result.heard });
+
+      // Feed the learner profile (fire-and-forget classification happens inside).
+      profile.recordAttempt({
+        wordId: currentWord.id,
+        polish: currentWord.polish,
+        phonetic: currentWord.phonetic,
+        heard: result.heard,
+        correct: result.correct,
+        confidence: result.confidence,
+      });
+
+      if (result.correct) {
+        setFeedback({ status: 'correct', heard: result.heard });
+        setPendingResult({ success: true, id: currentWord.id });
+      } else {
+        setFeedback({ status: 'incorrect', heard: result.heard, adviceLoading: true });
+        setPendingResult({ success: false, id: currentWord.id });
+
+        // Tier 3: lazy coaching, personalized with the learner profile excerpt.
+        aiService.getCoachAdvice(currentWord.polish, result.heard, { profileExcerpt: profile.profileExcerpt, phonetic: currentWord.phonetic }).then((advice) => {
+          setFeedback((prev) =>
+            prev && prev.status === 'incorrect' ? { ...prev, advice, adviceLoading: false } : prev
+          );
+        });
+      }
+    } catch (err) {
+      console.error('Validation error:', err);
+      setFeedback({ status: 'error', message: `Error: ${err.message}` });
+    }
+  };
+
+  const handleRecordToggle = () => {
+    // Ignore a stray/rapid re-trigger while a result is being processed (belt-and-suspenders
+    // alongside the RecordButton single-event fix).
+    if (feedback?.status === 'processing') {
+      log('button', 'recordToggle ignored (processing)');
+      return;
+    }
+    log('button', 'recordToggle', { isRecording: recorder.isRecording, wordId: currentWord?.id, mode: currentMode });
+    if (recorder.isRecording) {
+      validateRecording();
+    } else {
+      recorderRef.current.start();
+    }
+  };
+
+  const handleRetry = () => {
+    log('button', 'retry', { wordId: currentWord?.id });
+    setFeedback(null);
+    setPendingResult(null);
+    recorderRef.current.start();
+  };
+
   const handleGiveUp = () => {
     if (!currentWord) return;
-
-    // Immediate SRS Penalty (Bucket 0)
-    recordFailure(currentWord.id);
-    setLastResult({ wasCorrect: false });
-
-    // Show Feedback immediately (simulate incorrect result)
-    let feedbackMsg = (
-      <div>
-        <div className="main-feedback">❌ Ignored/Failed</div>
-        <div className="rich-feedback">
-          <p><strong>Expected:</strong> {currentWord.polish}</p>
-          <p style={{ marginTop: '0.5rem', fontStyle: 'italic', opacity: 0.8, color: 'var(--primary-accent)' }}>
-            Pronunciation: "{currentWord.phonetic}"
-          </p>
-          <div id="coach-bubble" className="coach-bubble">
-            💡 Marked as incorrect.
-          </div>
-        </div>
-      </div>
-    );
-
-    setFeedback(feedbackMsg);
+    log('button', 'giveUp', { wordId: currentWord.id });
+    recorderRef.current.cancel();
+    profile.recordAttempt({ wordId: currentWord.id, polish: currentWord.polish, phonetic: currentWord.phonetic, heard: '(gave up)', correct: false, confidence: 0 });
+    setFeedback({ status: 'revealed', advice: 'Marked as incorrect. Listen and repeat.' });
     setPendingResult({ success: false, id: currentWord.id });
   };
 
   const handleSuspend = () => {
     if (!currentWord) return;
     if (confirm(`Permanently suspend "${currentWord.polish}" from learning?`)) {
+      recorderRef.current.cancel();
       suspendWord(currentWord.id);
-      // Manually cycle to next word immediately
-      setTimeout(() => handleNext(), 50);
+      setPendingResult(null);
+      advance();
     }
   };
 
-
-  /* Removed duplicate isRecording declaration */
-  const [audioVolume, setAudioVolume] = useState(0);
-  const audioContextRef = useRef(null);
-  const analyserRef = useRef(null);
-  const animationFrameRef = useRef(null);
-
-  // ... (handleRecord logic)
-  const handleRecord = async () => {
-    if (!isRecording) {
-      // Manual Start / Retry
-      audioChunksRef.current = [];
-      if (mediaRecorder) {
-        try {
-          if (mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-
-          // Audio Visualization Setup
-          const stream = mediaRecorder.stream; // Use the existing stream from mediaRecorder if accessible, or we might need to get it again? 
-          // Actually, mediaRecorder is initialized in useEffect. Let's assume we can access the stream if we store it, or create a new context from the stream.
-          // Wait, mediaRecorder.stream is available.
-
-          if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-          }
-          if (audioContextRef.current.state === 'suspended') {
-            await audioContextRef.current.resume();
-          }
-
-          const source = audioContextRef.current.createMediaStreamSource(stream);
-          const analyser = audioContextRef.current.createAnalyser();
-          analyser.fftSize = 256;
-          source.connect(analyser);
-          analyserRef.current = analyser;
-
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-          const updateVolume = () => {
-            analyser.getByteFrequencyData(dataArray);
-            const sum = dataArray.reduce((a, b) => a + b, 0);
-            const avg = sum / dataArray.length; // 0-255
-            // Normalize and boost sensitivity (avg is usually low for speech)
-            const normalized = Math.min(100, (avg / 50) * 100);
-            setAudioVolume(normalized);
-            animationFrameRef.current = requestAnimationFrame(updateVolume);
-          };
-          updateVolume();
-
-          mediaRecorder.start();
-          setIsRecording(true);
-          setFeedback(null);
-        } catch (e) {
-          console.error("Mic error:", e);
-          setFeedback("Error starting microphone. Refresh page.");
-        }
-      }
-    } else {
-      // STOP and Validate
-      setIsRecording(false);
-      setAudioVolume(0);
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-
-      setFeedback('Processing...');
-      // ... rest of stop logic
-
-
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        await new Promise(resolve => {
-          mediaRecorder.onstop = resolve;
-          mediaRecorder.stop();
-        });
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-
-        if (audioBlob.size < 500) {
-          setFeedback("Audio too short/empty. Please try again.");
-          return;
-        }
-
-        let result;
-        if (currentMode === 'recall') {
-          result = await aiService.validatePronunciation(audioBlob, currentWord.polish);
-        } else {
-          result = { correct: true, feedback: "Good practice!" };
-        }
-
-        setLastResult({ wasCorrect: result.correct });
-
-        // TIER 1: Immediate Visualization
-        let feedbackMsg = (
-          <div>
-            <div className="main-feedback">
-              {result.correct ? "✅ Correct" : "❌ Incorrect"}
-            </div>
-            <div className="rich-feedback">
-              <p><strong>Expected:</strong> {currentWord.polish}</p>
-              {result.heard && <p><strong>AI Heard:</strong> {result.heard.toLowerCase()}</p>}
-
-              {/* TIER 2: Static Context (Immediate) */}
-              <p style={{ marginTop: '0.5rem', fontStyle: 'italic', opacity: 0.8, color: 'var(--primary-accent)' }}>
-                Pronunciation: "{currentWord.phonetic}"
-              </p>
-
-              {/* TIER 3: Lazy Coach Placeholder */}
-              {!result.correct && (
-                <div id="coach-bubble" className="coach-bubble loading">
-                  Thinking... 🧠
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
-        setFeedback(feedbackMsg);
-
-        // TIER 3: Lazy Load Coaching
-        if (!result.correct) {
-          aiService.getCoachAdvice(currentWord.polish, result.heard).then(advice => {
-            // Update feedback with advice
-            setFeedback(prev => (
-              <div>
-                <div className="main-feedback">❌ Incorrect</div>
-                <div className="rich-feedback">
-                  <p><strong>Expected:</strong> {currentWord.polish}</p>
-                  {result.heard && <p><strong>AI Heard:</strong> {result.heard.toLowerCase()}</p>}
-                  <p style={{ marginTop: '0.5rem', fontStyle: 'italic', opacity: 0.8, color: 'var(--primary-accent)' }}>Pronunciation: "{currentWord.phonetic}"</p>
-
-                  <div id="coach-bubble" className="coach-bubble">
-                    💡 {advice}
-                  </div>
-                </div>
-              </div>
-            ));
-          });
-        }
-
-        if (result.correct) {
-          if (currentMode === 'recall') {
-            // recordSuccess(currentWord.id); // Delayed
-            setPendingResult({ success: true, id: currentWord.id });
-          }
-        } else {
-          // recordFailure(currentWord.id); // Delayed
-          setPendingResult({ success: false, id: currentWord.id });
-        }
-      }
-    }
+  // Manual override: toggles what will be committed on Next. A second press restores the
+  // original result untouched (the feedback object is preserved; only `swapped` flips).
+  const handleSwap = () => {
+    if (!currentWord || !feedback) return;
+    const next = { ...feedback, swapped: !feedback.swapped };
+    setFeedback(next);
+    setPendingResult({ success: effectiveStatus(next) === 'correct', id: currentWord.id });
   };
 
   const playAudio = (word) => {
-    if (word.audio_cache_url) {
-      const audio = new Audio(word.audio_cache_url);
-      audio.play().catch(e => console.error("Audio play failed:", e));
+    if (word.audio) {
+      const audio = new Audio(`${import.meta.env.BASE_URL}${word.audio}`);
+      audio.play().catch((e) => console.error('Audio play failed:', e));
     } else {
-      // Fallback
       const utterance = new SpeechSynthesisUtterance(word.polish);
       utterance.lang = 'pl-PL';
       window.speechSynthesis.speak(utterance);
     }
   };
 
-  // Global Key Listener (Late binding)
+  // Global Enter shortcut.
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!currentWord) return;
+      if (e.key !== 'Enter' || showLexicon || !currentWord) return;
 
-      if (e.key === 'Enter' && !showLexicon) {
-        // ERROR FIX: In 'input' mode, Enter should just move to next (Recall), not start recording.
-        if (currentMode === 'input') {
-          handleNext();
-          return;
-        }
-
-        // If feedback is shown (and valid), move Next
-        if (feedback && feedback !== 'Processing...' && typeof feedback !== 'string') {
-          handleNext();
-        } else if (!feedback || feedback === 'Processing...') {
-          // If no feedback (Idle), toggle Record.
-          handleRecord();
-        }
+      if (currentMode === 'input') {
+        handleNext();
+        return;
       }
+      // Recall mode: Enter advances if we have a result, otherwise toggles recording.
+      const hasResult = feedback && feedback.status !== 'processing' && feedback.status !== 'error';
+      if (hasResult) handleNext();
+      else handleRecordToggle();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [feedback, showLexicon, isRecording, currentWord, currentMode]); // Added currentMode dependence
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feedback, showLexicon, currentWord?.id, currentMode, recorder.isRecording]);
 
   if (!currentWord) return <div>Loading...</div>;
 
+  const knownWords = Object.keys(gameState.words)
+    .map((id) => polishWords.find((w) => w.id == id)?.polish)
+    .filter(Boolean);
+
+  const hasResult = feedback && feedback.status !== 'processing' && feedback.status !== 'error';
+  const showRecordButton = currentMode === 'recall' && !hasResult;
+  const canSwap = feedback && (feedback.status === 'correct' || feedback.status === 'incorrect');
 
   return (
     <div className="app-container">
-
       <div className="header-controls">
         <h1>PolishFlow</h1>
         <button className="progress-btn" onClick={() => setShowLexicon(true)}>
@@ -383,7 +232,9 @@ function App() {
       <XPBar xp={gameState.xp} level={gameState.level} />
 
       <div className="progress-info">
-        {dueCount > 0 ? <span style={{ color: 'var(--warning-color)' }}>Reviews Due: {dueCount}</span> : <span style={{ color: 'var(--success-color)' }}>All Caught Up!</span>}
+        {dueCount > 0
+          ? <span style={{ color: 'var(--warning-color)' }}>Reviews Due: {dueCount}</span>
+          : <span style={{ color: 'var(--success-color)' }}>All Caught Up!</span>}
         <span style={{ opacity: 0.5, margin: '0 8px' }}>|</span>
         Bucket: {gameState.words[currentWord.id]?.bucket || 0}/5
       </div>
@@ -394,94 +245,73 @@ function App() {
 
       <div style={{ position: 'relative', width: '100%' }}>
         <div style={{
-          filter: `drop-shadow(0 0 ${volume * 30}px rgba(56, 189, 248, ${0.4 + volume * 0.6}))`,
+          filter: `drop-shadow(0 0 ${recorder.volume * 30}px rgba(56, 189, 248, ${0.4 + recorder.volume * 0.6}))`,
           transition: 'filter 0.1s ease-out'
         }}>
           <Flashcard
+            key={currentWord.id}
             word={currentWord}
-            mode={currentMode}
-            onAudioPlay={playAudio}
-            knownWords={Object.keys(gameState.words).map(id => polishWords.find(w => w.id == id)?.polish).filter(Boolean)}
+            knownWords={knownWords}
             attempted={!!feedback}
-            audioVolume={audioVolume}
-            isRecording={isRecording}
+            profileExcerpt={profile.profileExcerpt}
           />
         </div>
       </div>
 
       <div className="controls">
-        <button className="skip-button" onClick={handleGiveUp} title="Mark as Incorrect / Reveal">
-          🤷 Don't Know
+        <button
+          className="skip-button"
+          onClick={handleGiveUp}
+          title="Reveal the answer and mark this attempt incorrect"
+          aria-label="Give up and reveal the answer"
+        >
+          <Eye size={16} aria-hidden="true" /> Give Up
         </button>
 
-        <button className="known-button" style={{ filter: 'grayscale(1)' }} onClick={handleSuspend} title="Remove from curriculum">
-          🚫 Suspend
+        <button
+          className="suspend-button"
+          onClick={handleSuspend}
+          title="Remove this word from your curriculum permanently"
+          aria-label="Suspend this word from the curriculum"
+        >
+          <Ban size={16} aria-hidden="true" /> Suspend
         </button>
 
-        {currentMode !== 'input' ? (
-          <>
-            {!feedback || feedback === 'Processing...' || (typeof feedback === 'string' && feedback.startsWith('Error')) || feedback === 'Skipped cycle.' ? (
-              <RecordButton
-                isRecording={isRecording}
-                onRecord={handleRecord}
-              />
-            ) : (
-              <button className="next-button" onClick={handleNext}>
-                Next Word ➡️
-              </button>
-            )}
-          </>
+        {showRecordButton ? (
+          <RecordButton isRecording={recorder.isRecording} onRecord={handleRecordToggle} />
         ) : (
           <button className="next-button" onClick={handleNext}>
-            Next (Done Listening)
+            {currentMode === 'input' ? 'Next ➡️' : 'Next Word ➡️'}
           </button>
         )}
       </div>
 
-      {/* Show Retry button if incorrect. We check for 'Incorrect' text in feedback or just if we have feedback and it's not the 'Success' state (roughly) */}
-      {feedback && typeof feedback !== 'string' && feedback.props && feedback.props.children[0].props.children.includes("Incorrect") && (
+      {effectiveStatus(feedback) === 'incorrect' && (
         <div style={{ marginTop: '1rem' }}>
-          {feedback && typeof feedback !== 'string' && feedback.props && feedback.props.children[0].props.children.includes("Incorrect") && (
-            <div style={{ marginTop: '1rem' }}>
-              <button className="progress-btn" onClick={() => { setFeedback(null); setPendingResult(null); handleRecord(); }}>🔄 Retry / Record Again</button>
-            </div>
-          )}
+          <button className="progress-btn" onClick={handleRetry} aria-label="Record this word again">
+            <RotateCcw size={16} aria-hidden="true" /> Try Again
+          </button>
         </div>
       )}
 
       {feedback && (
         <div className="feedback" style={{ position: 'relative' }}>
-          {feedback}
-          <button
-            onClick={() => {
-              if (lastResult?.wasCorrect) {
-                recordFailure(currentWord.id);
-                setFeedback(<div className="main-feedback" style={{ color: 'var(--error-color)' }}>❌ Incorrect (Manual Override)</div>);
-                setLastResult({ wasCorrect: false });
-              } else {
-                recordSuccess(currentWord.id);
-                setFeedback(<div className="main-feedback">✅ Correct (Manual Override) <span className="score">+10 XP</span></div>);
-                setLastResult({ wasCorrect: true });
-                triggerConfetti();
+          <Feedback feedback={feedback} word={currentWord} onAudioPlay={playAudio} profileExcerpt={profile.profileExcerpt} />
+          {canSwap && (
+            <button
+              className="swap-btn"
+              onClick={handleSwap}
+              title={feedback.swapped ? 'Restore the original result' : 'Override the AI and flip this result'}
+              aria-label={
+                effectiveStatus(feedback) === 'correct' ? 'Mark as incorrect instead' : 'Mark as correct instead'
               }
-            }}
-            style={{
-              position: 'absolute',
-              top: '10px',
-              right: '10px',
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: '8px',
-              padding: '4px 8px',
-              cursor: 'pointer',
-              fontSize: '0.8rem',
-              color: 'var(--text-secondary)',
-              opacity: 0.7
-            }}
-            title="Swap Result (Correct/Incorrect)"
-          >
-            Swap ⇄
-          </button>
+            >
+              <ArrowLeftRight size={14} aria-hidden="true" />
+              {feedback.swapped
+                ? 'Restore result'
+                : effectiveStatus(feedback) === 'correct' ? 'Mark incorrect' : 'Mark correct'}
+            </button>
+          )}
         </div>
       )}
 
@@ -489,8 +319,9 @@ function App() {
         <Lexicon
           gameState={gameState}
           allWords={polishWords}
+          profile={profile}
           onClose={() => setShowLexicon(false)}
-          onReset={resetProgress}
+          onReset={() => { profile.reset(); resetProgress(); }}
         />
       )}
     </div>

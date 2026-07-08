@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { X, Trophy, Activity, BookOpen, AlertCircle, Clock, Layers } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { X, Trophy, Activity, BookOpen, AlertCircle, Clock, Layers, Sparkles, Target } from 'lucide-react';
 
-export const Lexicon = ({ gameState, allWords, onClose, onReset }) => {
+export const Lexicon = ({ gameState, allWords, profile, onClose, onReset }) => {
     const [activeTab, setActiveTab] = useState('dashboard');
+    // Snapshot "now" once at mount so render stays pure (this is a point-in-time modal).
+    const [now] = useState(() => Date.now());
 
     const words = Object.values(gameState.words);
     const totalLearned = words.length;
@@ -14,7 +17,7 @@ export const Lexicon = ({ gameState, allWords, onClose, onReset }) => {
         if (b >= 0 && b < 6) buckets[b]++;
     });
 
-    const reviewsDue = words.filter(w => w.nextReview <= Date.now() && w.bucket < 5).length;
+    const reviewsDue = words.filter(w => w.nextReview <= now && w.bucket < 5).length;
 
     return (
         <div className="lexicon-overlay">
@@ -36,6 +39,12 @@ export const Lexicon = ({ gameState, allWords, onClose, onReset }) => {
                         onClick={() => setActiveTab('raw')}
                     >
                         <BookOpen size={18} /> Word Data
+                    </button>
+                    <button
+                        className={`tab-btn ${activeTab === 'coach' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('coach')}
+                    >
+                        <Sparkles size={18} /> Coach's Notes
                     </button>
                 </div>
 
@@ -105,7 +114,7 @@ export const Lexicon = ({ gameState, allWords, onClose, onReset }) => {
                                             if (!stats) return null;
 
                                             // Calculate relative due time
-                                            const diff = stats.nextReview - Date.now();
+                                            const diff = stats.nextReview - now;
                                             let dueText = 'Now';
                                             if (diff > 0) {
                                                 const mins = Math.floor(diff / 60000);
@@ -121,12 +130,17 @@ export const Lexicon = ({ gameState, allWords, onClose, onReset }) => {
 
                                             if (stats.bucket >= 5) dueText = <span style={{ color: '#4ade80' }}>Done</span>;
 
+                                            // Attempts are derived from the two counters the SRS actually tracks.
+                                            const correct = stats.total_correct || 0;
+                                            const attempts = correct + (stats.total_incorrect || 0);
+                                            const pct = attempts ? Math.round((correct / attempts) * 100) : 0;
+
                                             return (
                                                 <tr key={word.id}>
                                                     <td className="polish-cell">{word.polish} <span style={{ opacity: 0.5, fontWeight: 'normal' }}>({word.english})</span></td>
                                                     <td className="center-cell"><span className="status-badge learning">{stats.bucket}</span></td>
                                                     <td className="center-cell">{dueText}</td>
-                                                    <td className="center-cell">{stats.total_correct}/{stats.total_attempts || 0} ({stats.total_correct && stats.total_attempts ? Math.round(stats.total_correct / stats.total_attempts * 100) : 0}%)</td>
+                                                    <td className="center-cell">{correct}/{attempts} ({pct}%)</td>
                                                 </tr>
                                             );
                                         })}
@@ -134,6 +148,37 @@ export const Lexicon = ({ gameState, allWords, onClose, onReset }) => {
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'coach' && (
+                        <div className="coach-notes-view">
+                            {profile?.focusNext && (
+                                <div className="stat-card" style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <Target size={22} color="#fbbf24" />
+                                    <div>
+                                        <div className="stat-label">Focus next</div>
+                                        <div style={{ fontWeight: 700 }}>{profile.focusNext}</div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {profile?.wiki?.current ? (
+                                <div className="wiki-content">
+                                    <ReactMarkdown>{profile.wiki.current}</ReactMarkdown>
+                                </div>
+                            ) : (
+                                <p className="no-data" style={{ textAlign: 'center', padding: '2rem', opacity: 0.7 }}>
+                                    Your coach is still getting to know you. Keep practicing — after a few
+                                    mistakes, personalized notes on your pronunciation will appear here.
+                                </p>
+                            )}
+
+                            {profile?.wiki?.versions?.length > 1 && (
+                                <p style={{ fontSize: '0.75rem', opacity: 0.5, marginTop: '0.75rem', textAlign: 'right' }}>
+                                    Profile revised {profile.wiki.versions.length} times.
+                                </p>
+                            )}
                         </div>
                     )}
                 </div>

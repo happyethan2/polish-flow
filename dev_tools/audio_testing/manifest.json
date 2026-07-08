@@ -1,0 +1,13 @@
+{
+  "description": "Maps recording folder names to their target Polish word. Cases: correct -> should pass, wrong -> should fail, english -> should fail (English word spoken).",
+  "words": {
+    "dziekuje": "dziękuję",
+    "dzien_dobry": "dzień dobry",
+    "gratuluje": "gratuluję",
+    "niedziela": "niedziela",
+    "pomaranczowy": "pomarańczowy",
+    "przepraszam": "przepraszam",
+    "przyjaciel": "przyjaciel",
+    "tak": "tak"
+  }
+}
