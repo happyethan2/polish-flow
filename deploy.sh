@@ -2,17 +2,20 @@
 #
 # Deploy Polish Flow to the home server from this dev machine.
 #
-# Flow: verify the working tree is clean and the branch is pushed to GitHub, copy the
-# (gitignored) .env to the server, then have the server clone/update the repo, build, and
-# atomically swap the static build into the directory Tailscale Serve publishes.
+# Workflow: do feature work on branches, merge into `main` when tested, then deploy `main`.
+# This script deploys `main` by default so the live site always tracks the blessed branch.
+# It never merges — merging stays a deliberate `git` step so conflicts are handled by you,
+# not silently by a script. It only builds a branch that is already merged and pushed.
 #
-# The server serves ~/apps/polish-flow/current as plain static files (Tailscale Serve on
-# :8443), so "deploy" just means replacing that directory with a fresh `vite build`.
-# rsync is not installed on the server, so the sync is done there with cp/mv instead.
+# What it does: confirm the deploy branch is pushed to GitHub, copy the (gitignored) .env to
+# the server, then have the server reset its checkout to origin/<branch>, build, and atomically
+# swap the static build into the directory Tailscale Serve publishes. The build is produced
+# server-side from origin/<branch>, so your local working tree never affects the artifact
+# (a dirty tree is a warning, not an error). rsync is not on the server, so the sync uses cp/mv.
 #
 # Usage:
-#   ./deploy.sh              # deploy the current branch (must be pushed)
-#   ./deploy.sh main         # deploy an explicit branch
+#   ./deploy.sh              # deploy main (the normal case)
+#   ./deploy.sh some-branch  # deploy a specific pushed branch (e.g. to trial it live)
 #
 # Runs under Git Bash on Windows (uses ssh + scp, which ship with Git for Windows).
 
@@ -25,30 +28,34 @@ REMOTE_BASE="/home/ethan/apps/polish-flow"
 REMOTE_REPO="$REMOTE_BASE/repo"
 REMOTE_CURRENT="$REMOTE_BASE/current"
 ENV_FILE=".env"
-BRANCH="${1:-$(git rev-parse --abbrev-ref HEAD)}"
+BRANCH="${1:-main}"
 
-say() { printf '\n\033[1;36m→ %s\033[0m\n' "$1"; }
-die() { printf '\n\033[1;31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
+say()  { printf '\n\033[1;36m→ %s\033[0m\n' "$1"; }
+warn() { printf '\n\033[1;33m! %s\033[0m\n' "$1"; }
+die()  { printf '\n\033[1;31m✗ %s\033[0m\n' "$1" >&2; exit 1; }
 
 # ---- dev-side preflight ------------------------------------------------------
 say "Deploying branch '$BRANCH' to $SERVER"
 
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Not inside a git repository."
-
-# Working tree must be clean — we deploy exactly what is committed and pushed, nothing local.
-if ! git diff-index --quiet HEAD -- 2>/dev/null || [ -n "$(git status --porcelain)" ]; then
-    die "Working tree is dirty. Commit or stash your changes before deploying."
-fi
-
 [ -f "$ENV_FILE" ] || die "$ENV_FILE not found. It holds VITE_GOOGLE_API_KEY needed for the build."
 
-say "Fetching origin to confirm '$BRANCH' is pushed and up to date…"
-git fetch --quiet origin "$BRANCH" || die "Branch '$BRANCH' does not exist on origin. Push it first."
+# The server builds from origin/$BRANCH, so uncommitted local edits never ship — just warn.
+if [ -n "$(git status --porcelain)" ]; then
+    warn "Working tree has uncommitted changes; they will NOT be deployed (only origin/$BRANCH is built)."
+fi
 
-LOCAL_SHA="$(git rev-parse HEAD)"
-REMOTE_SHA="$(git rev-parse "origin/$BRANCH")"
-if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
-    die "Local HEAD ($LOCAL_SHA) != origin/$BRANCH ($REMOTE_SHA). Push your latest commits first."
+say "Fetching origin to confirm '$BRANCH' is pushed and up to date…"
+git fetch --quiet origin "$BRANCH" || die "Branch '$BRANCH' does not exist on origin. Merge/push it first."
+
+# If a local copy of the deploy branch exists, make sure it matches origin — this catches the
+# common mistake of merging into main locally but forgetting to push before deploying.
+if git rev-parse --verify --quiet "$BRANCH" >/dev/null; then
+    LOCAL_SHA="$(git rev-parse "$BRANCH")"
+    REMOTE_SHA="$(git rev-parse "origin/$BRANCH")"
+    if [ "$LOCAL_SHA" != "$REMOTE_SHA" ]; then
+        die "Local $BRANCH ($LOCAL_SHA) != origin/$BRANCH ($REMOTE_SHA). Push it first: git push origin $BRANCH"
+    fi
 fi
 
 # ---- copy the (gitignored) env file -----------------------------------------
