@@ -1,0 +1,5 @@
+# Shell scripts and the recorder worklet must keep LF endings: deploy.sh pipes a heredoc to a
+# remote Linux bash over ssh, and CRLF there breaks every command. Force LF regardless of the
+# checkout machine's core.autocrlf.
+*.sh text eol=lf
+*.mjs text eol=lf
