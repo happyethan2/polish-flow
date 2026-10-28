@@ -1,0 +1,17 @@
+# USER unit: install to ~/.config/systemd/user/polish-flow.service, then
+#   systemctl --user daemon-reload && systemctl --user enable --now polish-flow
+# Linger=yes is set for ethan, so it starts at boot without a login.
+
+[Unit]
+Description=Polish Flow over HTTPS on the tailnet (Caddy)
+# Binding the tailnet IP fails until tailscaled is up at boot; retry forever.
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/bin/caddy run --adapter caddyfile --config %h/apps/polish-flow/Caddyfile
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

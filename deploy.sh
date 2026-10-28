@@ -102,4 +102,4 @@ rm -f "$REMOTE_REPO/.env"
 echo "  deployed $(git rev-parse --short HEAD) -> $REMOTE_CURRENT"
 REMOTE
 
-say "Done. Live at https://pc-server.tail994c3.ts.net:8443"
+say "Done. Live at https://polish.happyethan.me:8791 (and https://pc-server.tail994c3.ts.net:8443)"

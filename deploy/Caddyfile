@@ -1,0 +1,30 @@
+# Phone-reachable HTTPS for Polish Flow, run by the polish-flow user unit.
+# Installed by hand to ~/apps/polish-flow/Caddyfile (deploy.sh never touches it).
+#
+# polish.happyethan.me is a public DNS-only record for pc-server's tailnet IP: it
+# resolves through any DNS filter but only routes on the tailnet. The cert comes
+# from acme.sh (DNS-01), which installs it into certs/ and restarts the unit.
+# The old https://pc-server.tail994c3.ts.net:8443 (tailscale serve) still works.
+{
+	admin off
+	auto_https disable_redirects
+}
+
+https://polish.happyethan.me:8791 {
+	bind 100.108.134.104
+	tls /home/ethan/apps/polish-flow/certs/cert.pem /home/ethan/apps/polish-flow/certs/key.pem
+	encode zstd gzip
+
+	# Optional log collector (log-collector.mjs); the app's logger ignores failures.
+	handle /__log* {
+		reverse_proxy 127.0.0.1:9099
+	}
+
+	handle {
+		root * /home/ethan/apps/polish-flow/current
+		# Hashed assets can cache; the page that names them must not.
+		@html path / /index.html
+		header @html Cache-Control no-cache
+		file_server
+	}
+}
